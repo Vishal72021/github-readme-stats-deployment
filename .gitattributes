@@ -5,20 +5,34 @@
 
 * text=auto eol=lf
 
+# ----------------------------------------------------------
+# Documentation
+# ----------------------------------------------------------
+
+*.md text eol=lf
+LICENSE text
+CHANGELOG.md text
+README.md text
+
+# ----------------------------------------------------------
+# Configuration
+# ----------------------------------------------------------
+
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.env text eol=lf
+*.sh text eol=lf
+Dockerfile text eol=lf
+
+# ----------------------------------------------------------
+# Binary Assets
+# ----------------------------------------------------------
+
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.gif binary
 *.ico binary
 *.pdf binary
-
-*.sh text eol=lf
-*.yml text eol=lf
-*.yaml text eol=lf
-*.md text eol=lf
-*.py text eol=lf
-*.json text eol=lf
-
-LICENSE text
-README.md text
-CHANGELOG.md text
+*.zip binary

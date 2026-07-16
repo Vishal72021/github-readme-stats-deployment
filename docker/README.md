@@ -10,8 +10,7 @@ The project follows a Docker-first development approach with separate configurat
 
 | File | Purpose |
 |------|---------|
-| Dockerfile.dev | Development container configuration |
-| Dockerfile.prod | Production-ready container configuration |
+| Dockerfile | Production container definition |
 | healthcheck.sh | Container health validation |
 | README.md | Docker documentation |
 

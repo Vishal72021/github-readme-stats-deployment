@@ -1,16 +1,2 @@
 .git
 .github
-
-docs
-
-scripts
-
-.vscode
-.idea
-
-.env
-.env.*
-
-!.env.example
-
-*.log

@@ -3,12 +3,9 @@
 
 docs
 
-monitoring
-
 scripts
 
 .vscode
-
 .idea
 
 .env
@@ -16,9 +13,4 @@ scripts
 
 !.env.example
 
-README.md
-CHANGELOG.md
-
 *.log
-
-__pycache__/

@@ -1,21 +1,22 @@
 # syntax=docker/dockerfile:1.7
 
-ARG BASE_IMAGE=ghcr.io/anuraghazra/github-readme-stats:latest
+ARG NODE_VERSION=22-bookworm-slim
 
-FROM ${BASE_IMAGE}
+FROM node:${NODE_VERSION}
 
-LABEL org.opencontainers.image.title="GitHub Stats Platform"
-LABEL org.opencontainers.image.description="Production-grade deployment for GitHub Readme Stats."
+LABEL org.opencontainers.image.title="GitHub Readme Stats Deployment"
+LABEL org.opencontainers.image.description="Production deployment for GitHub Readme Stats"
 LABEL org.opencontainers.image.vendor="Vishal Tripathy"
-LABEL org.opencontainers.image.source="https://github.com/Vishal72021/github-stats-platform"
 LABEL org.opencontainers.image.licenses="MIT"
 
-ENV NODE_ENV=production
+WORKDIR /opt/github-readme-stats
+
+# Upstream source configuration
+ARG GRS_REPOSITORY=https://github.com/anuraghazra/github-readme-stats.git
+ARG GRS_REF=master
+
+# Clone and build steps will be added after upstream validation
 
 EXPOSE 9000
 
-HEALTHCHECK --interval=30s \
-           --timeout=5s \
-           --start-period=30s \
-           --retries=3 \
-CMD wget --spider -q http://localhost:9000/ || exit 1
+ENTRYPOINT ["/entrypoint.sh"]

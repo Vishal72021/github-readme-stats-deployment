@@ -1,9 +1,12 @@
 ---
 name: Feature Request
-about: Suggest a feature
+about: Suggest a new feature
+title: "[Feature]: "
+labels: enhancement
+assignees: Vishal72021
 ---
 
-## Problem
+## Problem Statement
 
 ## Proposed Solution
 

@@ -1,24 +1,41 @@
 ## Summary
 
-Describe the purpose of this Pull Request.
-
----
-
-## Changes
-
-- [ ]
-
----
-
 ## Checklist
+- [ ] Documentation updated
+- [ ] Tests completed
+# Summary
 
-- [ ] Code follows project standards.
-- [ ] Documentation updated.
-- [ ] Changelog updated (if required).
-- [ ] Tests completed.
+Provide a brief description of the proposed changes.
 
 ---
 
-## Related Issues
+# Type of Change
+
+- [ ] Feature
+- [ ] Bug Fix
+- [ ] Documentation
+- [ ] Refactoring
+- [ ] CI/CD
+- [ ] Maintenance
+
+---
+
+# Checklist
+
+- [ ] Documentation updated
+- [ ] Deployment validated
+- [ ] No secrets committed
+- [ ] Conventional Commit used
+- [ ] Related issue linked (if applicable)
+
+---
+
+# Testing
+
+Describe how the changes were tested.
+
+---
+
+# Related Issues
 
 Closes #

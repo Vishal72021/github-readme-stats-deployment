@@ -2,5 +2,5 @@ blank_issues_enabled: false
 
 contact_links:
   - name: Documentation
-    url: https://github.com/Vishal72021/github-stats-platform/tree/main/docs
-    about: Read the project documentation before opening an issue.
+    url: https://github.com/Vishal72021/github-readme-stats-deployment/tree/main/docs
+    about: Please read the documentation before opening an issue.

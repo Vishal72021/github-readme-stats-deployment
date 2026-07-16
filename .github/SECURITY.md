@@ -2,12 +2,17 @@
 
 ## Reporting a Vulnerability
 
-If you discover a security issue, please report it responsibly rather than opening a public issue.
+Please do **not** create a public GitHub issue for security vulnerabilities.
 
-Contact:
+Instead, report vulnerabilities responsibly by emailing:
 
-tripathyvishal7@gmail.com
+**tripathyvishal7@gmail.com**
 
----
+Please include:
 
-Thank you for helping improve the security of this project.
+- Description
+- Impact
+- Reproduction steps
+- Suggested fix (optional)
+
+Thank you for helping keep the project secure.

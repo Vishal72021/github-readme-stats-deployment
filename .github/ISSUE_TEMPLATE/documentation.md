@@ -1,10 +1,13 @@
 ---
 name: Documentation
-about: Improve project documentation
+about: Suggest documentation improvements
+title: "[Docs]: "
+labels: documentation
+assignees: Vishal72021
 ---
 
-## Section
+## Documentation Section
 
-## Suggested Change
+## Suggested Improvement
 
 ## Additional Context

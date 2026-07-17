@@ -1,55 +1,48 @@
 #!/usr/bin/env bash
+# shellcheck shell=bash
 
 ###############################################################################
-# Common Shell Utilities
+# Common Utility Library
 #
-# Shared utility library for deployment automation.
+# Shared shell utilities used by deployment scripts.
 #
-# Responsibilities:
+# Responsibilities
 #   - Logging
-#   - Error handling
-#   - Cleanup
-#   - Dependency validation
-#   - Shared helper functions
+#   - Command helpers
+#   - Filesystem helpers
+#   - Retry helpers
+#   - Formatting helpers
+#
+# This file intentionally contains NO project-specific configuration.
 ###############################################################################
 
-set -Eeuo pipefail
-
-###############################################################################
-# Constants
-###############################################################################
-
-readonly SCRIPT_NAME="$(basename "${0}")"
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+set -o errexit
+set -o nounset
+set -o pipefail
 
 ###############################################################################
 # Exit Codes
 ###############################################################################
 
 readonly EXIT_SUCCESS=0
-readonly EXIT_GENERAL_ERROR=1
-readonly EXIT_INVALID_ARGUMENT=2
-readonly EXIT_MISSING_DEPENDENCY=127
+readonly EXIT_FAILURE=1
 
 ###############################################################################
 # ANSI Colors
 ###############################################################################
 
 if [[ -t 1 ]]; then
-    readonly RED='\033[0;31m'
-    readonly GREEN='\033[0;32m'
-    readonly YELLOW='\033[1;33m'
-    readonly BLUE='\033[0;34m'
-    readonly CYAN='\033[0;36m'
-    readonly NC='\033[0m'
+    readonly COLOR_RED="\033[0;31m"
+    readonly COLOR_GREEN="\033[0;32m"
+    readonly COLOR_YELLOW="\033[1;33m"
+    readonly COLOR_BLUE="\033[0;34m"
+    readonly COLOR_RESET="\033[0m"
 else
-    readonly RED=''
-    readonly GREEN=''
-    readonly YELLOW=''
-    readonly BLUE=''
-    readonly CYAN=''
-    readonly NC=''
+    readonly COLOR_RED=""
+    readonly COLOR_GREEN=""
+    readonly COLOR_YELLOW=""
+    readonly COLOR_BLUE=""
+    readonly COLOR_RESET=""
 fi
 
 ###############################################################################
@@ -57,7 +50,9 @@ fi
 ###############################################################################
 
 timestamp() {
-    date '+%Y-%m-%d %H:%M:%S'
+
+    date +"%Y-%m-%d %H:%M:%S"
+
 }
 
 ###############################################################################
@@ -65,85 +60,104 @@ timestamp() {
 ###############################################################################
 
 log() {
+
     local level="$1"
     shift
 
-    printf "%b[%s] [%s]%b %s\n" \
-        "${CYAN}" \
+    printf "[%s] %-7s %s\n" \
         "$(timestamp)" \
         "${level}" \
-        "${NC}" \
         "$*"
+
 }
 
 log_info() {
-    log INFO "$@"
-}
 
-log_warn() {
-    log WARN "$@"
+    printf "%b[%s] INFO    %s%b\n" \
+        "${COLOR_BLUE}" \
+        "$(timestamp)" \
+        "$*" \
+        "${COLOR_RESET}"
+
 }
 
 log_success() {
-    log SUCCESS "$@"
+
+    printf "%b[%s] SUCCESS %s%b\n" \
+        "${COLOR_GREEN}" \
+        "$(timestamp)" \
+        "$*" \
+        "${COLOR_RESET}"
+
+}
+
+log_warn() {
+
+    printf "%b[%s] WARNING %s%b\n" \
+        "${COLOR_YELLOW}" \
+        "$(timestamp)" \
+        "$*" \
+        "${COLOR_RESET}"
+
 }
 
 log_error() {
-    log ERROR "$@" >&2
+
+    printf "%b[%s] ERROR   %s%b\n" \
+        "${COLOR_RED}" \
+        "$(timestamp)" \
+        "$*" \
+        "${COLOR_RESET}" >&2
+
 }
 
 ###############################################################################
-# Error Handling
+# Error Helpers
 ###############################################################################
 
 die() {
-    log_error "$@"
-    exit "${EXIT_GENERAL_ERROR}"
+
+    log_error "$*"
+    exit "${EXIT_FAILURE}"
+
 }
 
-error_handler() {
-    local exit_code="$?"
+###############################################################################
+# Formatting Helpers
+###############################################################################
 
-    log_error "Command failed."
+print_separator() {
 
-    log_error "Script : ${SCRIPT_NAME}"
-    log_error "Line   : ${BASH_LINENO[0]}"
-    log_error "Exit   : ${exit_code}"
+    printf '%*s\n' 80 '' | tr ' ' '-'
 
-    exit "${exit_code}"
 }
 
-trap error_handler ERR
+print_header() {
 
-###############################################################################
-# Cleanup
-###############################################################################
+    print_separator
+    printf "%s\n" "$1"
+    print_separator
 
-cleanup() {
-    :
 }
 
-trap cleanup EXIT
+print_section() {
+
+    printf "\n==> %s\n\n" "$1"
+
+}
 
 ###############################################################################
-# Dependency Validation
+# Command Helpers
 ###############################################################################
 
 command_exists() {
+
     command -v "$1" >/dev/null 2>&1
-}
 
-require_command() {
-
-    local cmd="$1"
-
-    if ! command_exists "${cmd}"; then
-        die "Required command not found: ${cmd}"
-    fi
 }
 
 ###############################################################################
-# Utility Helpers
+# Filesystem Helpers
 ###############################################################################
 
 ensure_directory() {
@@ -151,6 +165,7 @@ ensure_directory() {
     local directory="$1"
 
     mkdir -p "${directory}"
+
 }
 
 ensure_file() {
@@ -158,6 +173,7 @@ ensure_file() {
     local file="$1"
 
     touch "${file}"
+
 }
 
 copy_if_missing() {
@@ -168,14 +184,88 @@ copy_if_missing() {
     if [[ ! -f "${destination}" ]]; then
         cp "${source}" "${destination}"
     fi
+
 }
 
-print_header() {
+remove_if_exists() {
 
-    printf "\n"
-    printf "============================================================\n"
-    printf "%s\n" "$1"
-    printf "============================================================\n"
+    local target="$1"
+
+    if [[ -e "${target}" ]]; then
+        rm -rf "${target}"
+    fi
+
+}
+
+###############################################################################
+# Retry Helper
+###############################################################################
+
+retry_command() {
+
+    local retries="$1"
+    local delay="$2"
+
+    shift 2
+
+    local attempt=1
+
+    while true; do
+
+        if "$@"; then
+            return 0
+        fi
+
+        if (( attempt >= retries )); then
+            return 1
+        fi
+
+        log_warn \
+            "Attempt ${attempt}/${retries} failed. Retrying in ${delay}s..."
+
+        sleep "${delay}"
+
+        ((attempt++))
+
+    done
+
+}
+
+###############################################################################
+# Version Helper
+###############################################################################
+
+version_ge() {
+
+    local current="$1"
+    local minimum="$2"
+
+    [[ "$(printf '%s\n%s\n' "${minimum}" "${current}" | sort -V | head -n1)" == "${minimum}" ]]
+
+}
+
+###############################################################################
+# Platform Helpers
+###############################################################################
+
+is_wsl() {
+
+    grep -qi microsoft /proc/version 2>/dev/null
+
+}
+
+###############################################################################
+# User Confirmation
+###############################################################################
+
+confirm() {
+
+    local prompt="${1:-Continue?}"
+
+    read -r -p "${prompt} [y/N]: " reply
+
+    [[ "${reply}" =~ ^[Yy]([Ee][Ss])?$ ]]
+
 }
 
 ###############################################################################

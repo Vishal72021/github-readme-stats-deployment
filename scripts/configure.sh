@@ -230,9 +230,7 @@ print_configuration_summary() {
 
 main() {
 
-    print_header "GitHub Readme Stats Deployment"
-
-    printf "Version : %s\n\n" "${PROJECT_VERSION}"
+    print_script_header "Configure"
 
     create_directories
 

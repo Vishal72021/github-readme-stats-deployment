@@ -391,8 +391,7 @@ print_summary() {
 
 main() {
 
-    print_header "${PROJECT_NAME}"
-    printf "Version : %s\n\n" "${PROJECT_VERSION}"
+    print_script_header "Validate"
 
     run_validation "Checking Bash" validate_bash
 

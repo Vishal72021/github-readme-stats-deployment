@@ -39,12 +39,18 @@ readonly PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 readonly UPSTREAM_REPOSITORY="https://github.com/anuraghazra/github-readme-stats.git"
 readonly UPSTREAM_BRANCH="master"
+readonly UPSTREAM_REMOTE="origin"
 
 ###############################################################################
 # Deployment Directories
 ###############################################################################
 
 readonly DEPLOYMENT_DIRECTORY="${PROJECT_ROOT}/deployment"
+
+readonly REPOSITORY_NAME="github-readme-stats"
+
+readonly REPOSITORY_DIRECTORY="${DEPLOYMENT_DIRECTORY}/${REPOSITORY_NAME}"
+
 readonly BACKUP_DIRECTORY="${PROJECT_ROOT}/backups"
 readonly LOG_DIRECTORY="${PROJECT_ROOT}/logs"
 
@@ -69,6 +75,45 @@ readonly REQUIRED_ENV_KEYS=(
     CACHE_SECONDS
     ENVIRONMENT
     LOG_LEVEL
+)
+
+###############################################################################
+# Required Deployment Files
+###############################################################################
+
+readonly REQUIRED_DEPLOYMENT_FILES=(
+    ".env.example"
+)
+
+###############################################################################
+# Required Deployment Directories
+###############################################################################
+
+readonly REQUIRED_DEPLOYMENT_DIRECTORIES=(
+    "scripts"
+    "deployment"
+    "logs"
+    "backups"
+)
+
+###############################################################################
+# Required Repository Files
+###############################################################################
+
+readonly REQUIRED_REPOSITORY_FILES=(
+    "package.json"
+    "readme.md"
+    "LICENSE"
+)
+
+###############################################################################
+# Required Repository Directories
+###############################################################################
+
+readonly REQUIRED_REPOSITORY_DIRECTORIES=(
+    "api"
+    "src"
+    "themes"
 )
 
 ###############################################################################

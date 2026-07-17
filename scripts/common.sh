@@ -140,6 +140,16 @@ print_header() {
 
 }
 
+print_script_header() {
+
+    local script_name="$1"
+
+    print_header "${PROJECT_NAME} - ${script_name}"
+
+    printf "Version : %s\n\n" "${PROJECT_VERSION}"
+
+}
+
 print_section() {
 
     printf "\n==> %s\n\n" "$1"

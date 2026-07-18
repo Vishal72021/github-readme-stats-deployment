@@ -1,1 +1,37 @@
-# Placeholder
+###############################################################################
+# GitHub Readme Stats Deployment
+#
+# Docker Compose Configuration
+#
+# Responsibilities
+#   - Build the application container image
+#   - Configure runtime environment variables
+#   - Publish the application port
+#   - Configure container restart behavior
+#   - Orchestrate the application service
+#
+# Build Context
+#   Project repository root
+#
+# Dockerfile
+#   docker/Dockerfile
+###############################################################################
+
+services:
+  github-readme-stats:
+    container_name: github-readme-stats
+
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+
+    env_file:
+      - ../.env
+
+    environment:
+      NODE_ENV: production
+
+    ports:
+      - "${PORT:-9000}:${PORT:-9000}"
+
+    restart: unless-stopped

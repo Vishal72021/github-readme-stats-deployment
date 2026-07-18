@@ -34,6 +34,46 @@ readonly PROJECT_VERSION="1.0.0"
 readonly PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
 ###############################################################################
+# Docker Paths
+###############################################################################
+
+readonly DOCKER_DIRECTORY="${PROJECT_ROOT}/docker"
+
+readonly DOCKERFILE="${DOCKER_DIRECTORY}/Dockerfile"
+readonly DOCKER_ENTRYPOINT="${DOCKER_DIRECTORY}/entrypoint.sh"
+readonly DOCKER_HEALTHCHECK="${DOCKER_DIRECTORY}/healthcheck.sh"
+
+###############################################################################
+# Docker Compose Paths
+###############################################################################
+
+readonly COMPOSE_DIRECTORY="${PROJECT_ROOT}/compose"
+
+readonly COMPOSE_FILE="${COMPOSE_DIRECTORY}/docker-compose.yml"
+
+###############################################################################
+# Docker Runtime
+###############################################################################
+
+readonly DOCKER_SERVICE_NAME="github-readme-stats"
+readonly DOCKER_CONTAINER_NAME="github-readme-stats"
+
+###############################################################################
+# Application Health
+###############################################################################
+
+readonly HEALTH_CHECK_PATH="/api/"
+readonly HEALTH_CHECK_RETRIES=10
+readonly HEALTH_CHECK_DELAY=3
+
+###############################################################################
+# Container Health
+###############################################################################
+
+readonly CONTAINER_HEALTH_RETRIES=12
+readonly CONTAINER_HEALTH_DELAY=5
+
+###############################################################################
 # Upstream Repository
 ###############################################################################
 
@@ -75,6 +115,14 @@ readonly REQUIRED_ENV_KEYS=(
     CACHE_SECONDS
     ENVIRONMENT
     LOG_LEVEL
+)
+
+###############################################################################
+# Required Deployment Secrets
+###############################################################################
+
+readonly REQUIRED_DEPLOYMENT_SECRETS=(
+    PAT_1
 )
 
 ###############################################################################
@@ -137,6 +185,12 @@ readonly RETRY_DELAY=2
 ###############################################################################
 
 readonly GITHUB_CHECK_URL="${UPSTREAM_REPOSITORY}"
+
+###############################################################################
+# Backup Configuration
+###############################################################################
+
+readonly BACKUP_RETENTION_COUNT=5
 
 ###############################################################################
 # Default Runtime Values

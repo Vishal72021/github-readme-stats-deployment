@@ -51,13 +51,23 @@ is_positive_integer() {
 # Workspace Setup
 ###############################################################################
 
-create_directories() {
+create_required_directories() {
 
     print_section "Creating Required Directories"
 
-    ensure_directory "${DEPLOYMENT_DIRECTORY}"
-    ensure_directory "${BACKUP_DIRECTORY}"
-    ensure_directory "${LOG_DIRECTORY}"
+    local directories=(
+        "${DEPLOYMENT_DIRECTORY}"
+        "${BACKUP_DIRECTORY}"
+        "${LOG_DIRECTORY}"
+        "${DOCKER_DIRECTORY}"
+        "${COMPOSE_DIRECTORY}"
+    )
+
+    local directory
+
+    for directory in "${directories[@]}"; do
+        ensure_directory "${directory}"
+    done
 
     log_success "Directory structure is ready."
 
@@ -232,7 +242,7 @@ main() {
 
     print_script_header "Configure"
 
-    create_directories
+    create_required_directories
 
     create_env_file
 

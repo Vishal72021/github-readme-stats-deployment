@@ -1,11 +1,27 @@
-# Docker Image
+# Docker Runtime
 
-This directory contains the container image definition and runtime scripts used
-to run GitHub Readme Stats as a standalone Docker container.
+This directory contains the Docker runtime configuration for the GitHub Readme Stats application.
 
-The Docker layer is responsible for converting the upstream GitHub Readme Stats
-application into a reproducible container image that can be deployed by the
-project's Compose and deployment layers.
+The Docker layer packages the upstream GitHub Readme Stats application into a reproducible container image suitable for deployment through the project's Docker Compose and Nginx reverse proxy architecture.
+
+---
+
+## Purpose
+
+The Docker runtime is responsible for:
+
+- Building the GitHub Readme Stats application image.
+- Installing Node.js dependencies.
+- Packaging the application source code.
+- Running the application as a non-root user.
+- Providing container startup validation.
+- Providing application health checking.
+- Exposing the internal application port.
+- Supporting reproducible container deployment.
+
+The Docker layer does not publish the application directly to external clients.
+
+Public HTTP traffic is handled by the Nginx reverse proxy.
 
 ---
 
@@ -13,390 +29,577 @@ project's Compose and deployment layers.
 
 ```text
 docker/
+├── README.md
 ├── Dockerfile
 ├── entrypoint.sh
-├── healthcheck.sh
-└── README.md
+└── healthcheck.sh
 ```
 
-### `Dockerfile`
-
-Defines the production container image for GitHub Readme Stats.
-
-The image:
-
-- Uses Node.js 22 on Alpine Linux.
-- Installs application dependencies in a dedicated dependency stage.
-- Copies the cloned upstream application into the runtime image.
-- Installs `curl` for container-local health checks.
-- Runs the application as the non-root `node` user.
-- Configures the container entrypoint.
-- Configures the Docker health check.
-- Starts the standalone Express server.
-
-### `entrypoint.sh`
-
-Initializes the application container before starting the Node.js process.
-
-The entrypoint:
-
-- Validates required runtime configuration.
-- Ensures the GitHub Personal Access Token is configured.
-- Ensures the application port is configured.
-- Prints safe runtime information.
-- Never prints secret values.
-- Uses `exec` to hand control to the application process.
-
-Using `exec` ensures that the Node.js process becomes the primary container
-process and receives operating-system signals correctly.
-
-### `healthcheck.sh`
-
-Performs an HTTP reachability check from inside the running container.
-
-The health check verifies that the standalone Express server is accepting HTTP
-connections on the configured application port.
-
-The script returns:
-
-```text
-0    Application is reachable
-1    Application is unreachable
-```
-
-Docker uses this result to determine whether the container is healthy or
-unhealthy.
-
----
-
-## Build Context
-
-The Docker image uses the project repository root as its build context:
-
-```text
-github-readme-stats-deployment/
-```
-
-This is required because the image build needs access to both:
-
-```text
-deployment/github-readme-stats/
-docker/
-```
-
-The application source is dynamically cloned into:
-
-```text
-deployment/github-readme-stats/
-```
-
-by the deployment framework.
-
-The deployment repository therefore does not vendor or permanently maintain a
-copy of the upstream GitHub Readme Stats source code.
-
----
-
-## Docker Ignore Configuration
-
-The Docker build context is controlled by the root-level:
+The Docker build context also uses the project-level:
 
 ```text
 .dockerignore
 ```
 
-The ignore file prevents unnecessary or sensitive files from being sent to the
-Docker build context.
+---
 
-Examples include:
+## Runtime Architecture
 
-- `.git`
-- `.env`
-- IDE configuration
-- logs
-- backups
-- caches
-- temporary files
-- existing Node.js dependencies
-- build artifacts
-
-The runtime application source under:
+The application container operates behind Nginx.
 
 ```text
-deployment/github-readme-stats/
+Client
+  │
+  ▼
+Nginx :80
+  │
+  │ Internal Docker Network
+  ▼
+GitHub Readme Stats :9000
 ```
 
-must remain available to the Docker build context.
-
-The `docker/` directory must also remain available because the Dockerfile copies
-the container runtime scripts from this directory.
+The application container does not publish port `9000` directly to the host.
 
 ---
 
-## Image Architecture
+## Dockerfile
 
-The Dockerfile uses a multi-stage build.
+The application image is defined in:
 
 ```text
-Dependency Stage
-      │
-      ├── Copy package.json
-      ├── Copy package-lock.json
-      └── npm ci
-              │
-              ▼
-         node_modules
-              │
-              ▼
-Runtime Stage
-      │
-      ├── Node.js 22 Alpine
-      ├── curl
-      ├── Application dependencies
-      ├── Application source
-      ├── entrypoint.sh
-      └── healthcheck.sh
+docker/Dockerfile
 ```
 
-This separates dependency installation from final runtime image construction.
+The Dockerfile uses a multi-stage build architecture.
+
+The primary stages are:
+
+```text
+dependencies
+    │
+    └── Install Node.js dependencies
+            │
+            ▼
+runtime
+    │
+    └── Build the final application runtime image
+```
+
+This separates dependency installation from runtime image construction.
+
+---
+
+## Base Image
+
+The runtime uses:
+
+```text
+node:22-alpine
+```
+
+The Node.js version satisfies the upstream application's engine requirement:
+
+```text
+Node.js >= 22
+```
+
+The Alpine-based image provides a relatively small runtime foundation.
 
 ---
 
 ## Dependency Installation
 
-The upstream standalone Express server imports the `express` package at runtime.
-
-The upstream project currently declares `express` as a development dependency.
-For this reason, the dependency stage uses:
+Dependencies are installed using:
 
 ```text
 npm ci
 ```
 
-rather than:
+The build copies:
 
 ```text
-npm ci --omit=dev
+package.json
+package-lock.json
 ```
 
-This ensures all dependencies required by the standalone Express deployment are
-available in the final container.
+before running dependency installation.
 
-Dependencies are installed using the upstream lock file to provide deterministic
-dependency resolution.
+Using `npm ci` provides deterministic installation based on the lock file.
 
 ---
 
-## Runtime User
+## Upstream Application Source
 
-The application runs as the built-in non-root Node.js user:
+The GitHub Readme Stats source repository is cloned into:
+
+```text
+deployment/github-readme-stats
+```
+
+during the project bootstrap and clone workflow.
+
+The Docker build copies the runtime application source from this directory into:
+
+```text
+/app
+```
+
+inside the container.
+
+The cloned upstream repository is a runtime workspace artifact and is not committed to the deployment repository.
+
+---
+
+## Runtime Working Directory
+
+The application runs from:
+
+```text
+/app
+```
+
+inside the container.
+
+---
+
+## Non-Root Runtime
+
+The application runs using the Node.js image's non-root:
 
 ```text
 node
 ```
 
-Application source and dependency files are copied into the runtime image with
-the appropriate ownership.
+user.
 
-This avoids running the GitHub Readme Stats application as the root user.
+Application files and installed dependencies are owned appropriately for the runtime user.
+
+Running the application as a non-root user reduces the privileges available to the application process inside the container.
 
 ---
 
-## Application Startup
+## Entrypoint
 
-The container startup flow is:
-
-```text
-Container Start
-      │
-      ▼
-entrypoint.sh
-      │
-      ├── Validate PAT_1
-      ├── Validate PORT
-      ├── Print safe runtime information
-      │
-      ▼
-exec node express.js
-      │
-      ▼
-GitHub Readme Stats
-```
-
-The standalone Express application listens on:
+Container startup is managed by:
 
 ```text
-0.0.0.0:${PORT}
+docker/entrypoint.sh
 ```
 
-The default application port is:
+The entrypoint performs startup validation before launching the application.
+
+The entrypoint is installed inside the image at:
+
+```text
+/usr/local/bin/entrypoint.sh
+```
+
+and marked executable during the image build.
+
+---
+
+## Health Check
+
+Application health checking is provided by:
+
+```text
+docker/healthcheck.sh
+```
+
+The health check script is installed inside the image at:
+
+```text
+/usr/local/bin/healthcheck.sh
+```
+
+The script verifies that the application is responding inside the container.
+
+The container health state can be inspected using:
+
+```powershell
+docker inspect --format='{{.State.Health.Status}}' github-readme-stats
+```
+
+Expected healthy state:
+
+```text
+healthy
+```
+
+---
+
+## Internal Application Port
+
+The GitHub Readme Stats application listens on:
 
 ```text
 9000
 ```
 
-The port can be overridden through runtime environment configuration.
+The port is configured through:
+
+```text
+PORT
+```
+
+Default:
+
+```dotenv
+PORT=9000
+```
+
+This port is an internal application port.
+
+It is not the public deployment port.
 
 ---
 
-## Container Health Check
+## Network Exposure
 
-The Docker image defines a native container health check.
+The application container does not publish port `9000` directly to the host.
 
-The health-check script performs an HTTP request against the application from
-inside the running container.
+Docker Compose declares the application port for internal service communication:
 
-The default health configuration is:
-
-```text
-Host: 127.0.0.1
-Port: ${PORT:-9000}
-Path: /api/
+```yaml
+expose:
+  - "9000"
 ```
 
-The `/api/` route is used as an HTTP reachability probe for the standalone
-Express server.
-
-The health check verifies server reachability rather than the success of a
-specific GitHub API operation.
-
-Docker reports the container health state as one of:
+The runtime communication model is:
 
 ```text
-starting
+github-readme-stats-nginx
+        │
+        │ app-network
+        ▼
+github-readme-stats:9000
+```
+
+External clients access the application through Nginx.
+
+---
+
+## Public HTTP Access
+
+The public HTTP port is controlled separately through:
+
+```text
+HTTP_PORT
+```
+
+The default architecture is:
+
+```text
+Host :80
+   │
+   ▼
+Nginx :80
+   │
+   ▼
+Application :9000
+```
+
+The application container should never require direct host access under the current architecture.
+
+---
+
+## Runtime Environment Variables
+
+The application receives runtime configuration including:
+
+```text
+PAT_1
+PORT
+CACHE_SECONDS
+ENVIRONMENT
+LOG_LEVEL
+NODE_ENV
+```
+
+Secrets are provided at runtime and are not baked into the Docker image.
+
+The GitHub Personal Access Token must never be committed to:
+
+- The Dockerfile.
+- Docker image layers.
+- Git-tracked environment files.
+- Documentation examples containing real credentials.
+
+---
+
+## Build Context
+
+The Docker build context is the project root.
+
+This allows the Dockerfile to access:
+
+```text
+deployment/github-readme-stats
+docker/entrypoint.sh
+docker/healthcheck.sh
+```
+
+The build is configured through Docker Compose.
+
+---
+
+## `.dockerignore`
+
+The project-level `.dockerignore` controls which files are excluded from the Docker build context.
+
+Typical exclusions include:
+
+- Git metadata.
+- Local environment files.
+- Logs.
+- Backups.
+- Temporary files.
+- IDE metadata.
+- Unnecessary build artifacts.
+
+The `.dockerignore` should prevent sensitive or unnecessary files from being sent to the Docker daemon during image builds.
+
+---
+
+## Build the Application Image
+
+Run from the project root:
+
+```text
+D:\Vishal72021\github-readme-stats-deployment
+```
+
+Build through Docker Compose:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml build github-readme-stats
+```
+
+The normal deployment workflow performs this build automatically.
+
+---
+
+## Start the Application Stack
+
+The recommended deployment command is:
+
+```powershell
+bash scripts/deploy.sh
+```
+
+This deploys both:
+
+```text
+github-readme-stats
+github-readme-stats-nginx
+```
+
+and verifies their health.
+
+For manual Compose operation:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml up -d
+```
+
+---
+
+## Inspect the Application Container
+
+Run:
+
+```powershell
+docker inspect github-readme-stats
+```
+
+Check container health directly:
+
+```powershell
+docker inspect --format='{{.State.Health.Status}}' github-readme-stats
+```
+
+Expected:
+
+```text
 healthy
-unhealthy
 ```
 
-The deployment script waits for the container to become healthy before declaring
-the deployment successful.
+---
+
+## View Application Logs
+
+Run:
+
+```powershell
+docker logs github-readme-stats
+```
+
+Or through Compose:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml logs github-readme-stats
+```
+
+Follow logs:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml logs -f github-readme-stats
+```
 
 ---
 
-## Runtime Configuration
+## Verify Port Isolation
 
-Runtime configuration is provided through environment variables.
+Run:
 
-| Variable | Purpose |
-| --- | --- |
-| `PAT_1` | GitHub Personal Access Token used by GitHub Readme Stats |
-| `PORT` | Application listening port |
-| `CACHE_SECONDS` | Application cache duration |
-| `ENVIRONMENT` | Deployment environment |
-| `LOG_LEVEL` | Runtime or deployment logging level |
+```powershell
+docker port github-readme-stats
+```
 
-Secrets must never be stored directly in the Dockerfile or committed to the
-repository.
+There should be no host-published mapping for port `9000`.
 
-Runtime values are injected into the container through Docker Compose.
+Attempting direct access from the host:
+
+```powershell
+curl.exe --max-time 5 http://localhost:9000
+```
+
+should fail.
+
+This is expected behavior.
+
+The application must be accessed through Nginx.
 
 ---
 
-## Building the Image
+## Verify Application Through Nginx
 
-Image builds are normally managed by:
+Run:
+
+```powershell
+curl.exe -o NUL -s -w "%{http_code}`n" "http://localhost/api?username=octocat"
+```
+
+Expected:
 
 ```text
-scripts/deploy.sh
+200
 ```
 
-For manual validation, run the following command from the project root:
-
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    build github-readme-stats
-```
-
-The deployment framework should be preferred for normal deployments because it
-also performs prerequisite validation, configuration validation, container
-verification, and application health checks.
+This verifies that the containerized application is reachable through the supported reverse proxy path.
 
 ---
 
-## Inspecting Container Health
+## Restart the Application Container
 
-From the project root, container status and health can be inspected with:
+Run:
 
-```bash
-docker inspect \
-    --format '{{.State.Status}} / {{.State.Health.Status}}' \
-    github-readme-stats
+```powershell
+docker restart github-readme-stats
 ```
 
-A healthy deployment should report:
+Check health:
+
+```powershell
+docker inspect --format='{{.State.Health.Status}}' github-readme-stats
+```
+
+After the container becomes healthy, verify the application through Nginx:
+
+```powershell
+curl.exe -o NUL -s -w "%{http_code}`n" "http://localhost/api?username=octocat"
+```
+
+Expected:
 
 ```text
-running / healthy
+200
 ```
 
 ---
 
-## Security Considerations
+## Image Security Considerations
 
-The Docker implementation follows these security principles:
+The runtime image follows several baseline container security practices:
 
-- Secrets are injected at runtime rather than embedded in the image.
-- Secret values are never printed by the container entrypoint.
-- The application runs as a non-root user.
-- The `.env` file is excluded from the Docker build context.
-- Container health checks do not expose credentials.
-- Application dependencies are installed from the upstream lock file.
-- Runtime configuration is separated from image construction.
+- Uses a minimal Alpine-based Node.js image.
+- Runs the application as a non-root user.
+- Keeps secrets outside the image.
+- Uses deterministic dependency installation.
+- Separates dependency installation from runtime construction.
+- Uses explicit application health checks.
+- Avoids direct public exposure of the application port.
 
-Never commit the project `.env` file or include Personal Access Token values in
-documentation, logs, screenshots, or shared command output.
+Dependency vulnerabilities reported by `npm audit` originate from the dependency tree used by the upstream application and should be reviewed separately.
+
+Automated commands such as:
+
+```text
+npm audit fix --force
+```
+
+should not be applied blindly because they may introduce breaking dependency changes.
 
 ---
 
-## Ownership Boundaries
+## Runtime Boundary
 
-The Docker layer owns:
+The Docker runtime owns the application container.
 
-```text
-Image construction
-Container initialization
-Container-local health checking
-Runtime user configuration
-Application process startup
-```
+The Compose layer owns service orchestration.
 
-The Docker layer does not own:
+The Nginx layer owns external HTTP ingress.
+
+The responsibility boundaries are:
 
 ```text
-Repository cloning
-Workspace configuration
-Deployment orchestration
-Application updates
-Backups
-Restoration
+Docker
+   │
+   └── Application runtime image
+
+Docker Compose
+   │
+   └── Runtime service orchestration
+
+Nginx
+   │
+   └── Public HTTP entry point
+
+Deployment Scripts
+   │
+   └── Automated deployment and verification
 ```
 
-Those responsibilities belong to other layers of the deployment framework.
+Keeping these responsibilities separate reduces coupling between infrastructure components.
 
 ---
 
-## Related Components
+## Current Limitations
 
-```text
-scripts/bootstrap.sh
-        │
-        ▼
-deployment/github-readme-stats/
-        │
-        ▼
-docker/Dockerfile
-        │
-        ▼
-Container Image
-        │
-        ▼
-compose/docker-compose.yml
-        │
-        ▼
-scripts/deploy.sh
-        │
-        ▼
-Running Application
-```
+The current Docker runtime does not provide:
+
+- TLS termination.
+- HTTPS configuration.
+- Container image registry publishing.
+- Multi-architecture image publishing.
+- Kubernetes deployment.
+- Automated vulnerability remediation.
+
+These concerns belong to future deployment milestones.
+
+---
+
+## Future Extensions
+
+The Docker architecture can later support:
+
+- Image registry publishing.
+- Versioned application images.
+- Image vulnerability scanning.
+- Software Bill of Materials generation.
+- Image signing.
+- Multi-platform builds.
+- CI/CD image pipelines.
+- Kubernetes deployment.
+
+Changes to the Docker runtime should preserve the existing separation between the internal application container and the public reverse proxy boundary.

@@ -1,13 +1,27 @@
-# Compose
-Placeholder.
 # Docker Compose
 
-This directory contains the Docker Compose configuration used to orchestrate
-the GitHub Readme Stats application container.
+This directory contains the Docker Compose configuration used to orchestrate the GitHub Readme Stats Deployment runtime stack.
 
-The Compose layer connects the Docker image definition, runtime environment
-configuration, port publishing, restart behavior, networking, and deployment
-lifecycle.
+Docker Compose manages the application container, Nginx reverse proxy, container networking, environment configuration, health checks, restart policies, and service dependencies.
+
+---
+
+## Purpose
+
+The Compose layer defines how the deployment services operate together.
+
+Its responsibilities include:
+
+- Building the GitHub Readme Stats application image.
+- Running the application container.
+- Running the Nginx reverse proxy.
+- Injecting runtime environment variables.
+- Creating the internal Docker network.
+- Managing container health checks.
+- Managing service startup dependencies.
+- Publishing the public HTTP port.
+- Mounting Nginx configuration.
+- Applying container restart policies.
 
 ---
 
@@ -15,651 +29,644 @@ lifecycle.
 
 ```text
 compose/
-├── docker-compose.yml
-└── README.md
+├── README.md
+└── docker-compose.yml
 ```
 
-### `docker-compose.yml`
-
-Defines the GitHub Readme Stats application service.
-
-The Compose configuration is responsible for:
-
-- Building the application container image.
-- Selecting the project Dockerfile.
-- Injecting runtime environment variables.
-- Publishing the application port.
-- Configuring container restart behavior.
-- Creating the default application network.
-- Starting and managing the application service.
-
-Container-local health checking is defined by the Docker image and inherited by
-the Compose service.
-
----
-
-## Service Architecture
-
-The current Compose configuration defines one application service:
-
-```text
-github-readme-stats
-```
-
-The runtime architecture is:
-
-```text
-Docker Compose
-      │
-      ▼
-github-readme-stats service
-      │
-      ├── Build Docker image
-      ├── Load runtime environment
-      ├── Publish application port
-      ├── Configure restart policy
-      │
-      ▼
-github-readme-stats container
-      │
-      ▼
-Node.js Express Server
-```
-
-The service and container use stable names so the deployment framework can
-reliably inspect and manage the running application.
-
----
-
-## Build Configuration
-
-The Compose file is located at:
+The runtime definition is contained in:
 
 ```text
 compose/docker-compose.yml
 ```
 
-The Docker build context is the project repository root:
+---
 
-```yaml
-build:
-  context: ..
-  dockerfile: docker/Dockerfile
-```
+## Runtime Architecture
 
-Because the Compose file is located inside the `compose/` directory, `..`
-resolves to:
+The deployment uses two runtime services:
 
 ```text
-github-readme-stats-deployment/
+Client
+  │
+  │ HTTP
+  ▼
+Host : HTTP_PORT
+  │
+  ▼
+Nginx :80
+  │
+  │ app-network
+  ▼
+github-readme-stats :9000
 ```
 
-This allows the Docker build to access:
+The services are:
 
 ```text
-docker/
-deployment/github-readme-stats/
+github-readme-stats
+    └── Application service
+
+nginx
+    └── Reverse proxy service
 ```
 
-The root-level `.dockerignore` controls which files are included in the build
-context.
+Nginx is the only service that publishes a host-facing HTTP port.
 
 ---
 
-## Application Source
+## Application Service
 
-The upstream GitHub Readme Stats repository is dynamically cloned into:
-
-```text
-deployment/github-readme-stats/
-```
-
-The Compose layer does not clone or update the repository.
-
-Repository lifecycle operations are owned by the shell-script layer.
-
-The expected lifecycle is:
-
-```text
-scripts/bootstrap.sh
-        │
-        ▼
-scripts/clone.sh
-        │
-        ▼
-deployment/github-readme-stats/
-        │
-        ▼
-Docker Build
-```
-
-The application source must exist before the Compose build is executed.
-
----
-
-## Environment Configuration
-
-Runtime environment variables are loaded from:
-
-```text
-.env
-```
-
-The Compose configuration references the environment file using:
-
-```yaml
-env_file:
-  - ../.env
-```
-
-The primary runtime variables are:
-
-| Variable | Purpose |
-| --- | --- |
-| `PAT_1` | GitHub Personal Access Token |
-| `PORT` | Application listening and published port |
-| `CACHE_SECONDS` | Application cache duration |
-| `ENVIRONMENT` | Deployment environment |
-| `LOG_LEVEL` | Runtime or deployment logging level |
-
-The Compose service also explicitly configures:
-
-```text
-NODE_ENV=production
-```
-
-The `.env` file contains runtime secrets and must never be committed to version
-control.
-
-The `.env.example` file documents required configuration keys without containing
-real secret values.
-
----
-
-## Port Mapping
-
-The application port is configured dynamically:
-
-```yaml
-ports:
-  - "${PORT:-9000}:${PORT:-9000}"
-```
-
-With the default configuration:
-
-```text
-PORT=9000
-```
-
-the runtime flow is:
-
-```text
-Host
-:9000
-   │
-   ▼
-Docker Port Mapping
-   │
-   ▼
-Container
-:9000
-   │
-   ▼
-Express Server
-:9000
-```
-
-If the `PORT` environment variable is changed, both the published host port and
-the container application port change consistently.
-
-The upstream Express application reads the same `PORT` environment variable.
-
----
-
-## Container Naming
-
-The application container uses the stable name:
+The application service is:
 
 ```text
 github-readme-stats
 ```
 
-This allows the deployment framework and operators to inspect the container
-using commands such as:
+Its container name is:
 
-```bash
-docker inspect github-readme-stats
+```text
+github-readme-stats
 ```
 
-and:
+The application image is built from the project Dockerfile.
 
-```bash
-docker logs github-readme-stats
+Build context:
+
+```text
+Project Root
 ```
 
-The deployment framework uses the same container name when verifying runtime
-status and health.
+Dockerfile:
+
+```text
+docker/Dockerfile
+```
+
+The application runs internally on:
+
+```text
+9000
+```
+
+---
+
+## Application Environment
+
+The application receives runtime configuration through environment variables.
+
+Configured variables include:
+
+```text
+PAT_1
+PORT
+CACHE_SECONDS
+ENVIRONMENT
+LOG_LEVEL
+NODE_ENV
+```
+
+Sensitive values are loaded from the local `.env` file.
+
+The `.env` file must not be committed to Git.
+
+---
+
+## Application Port Exposure
+
+The application declares:
+
+```yaml
+expose:
+  - "9000"
+```
+
+Port `9000` is available for communication between containers on the Docker network.
+
+It is not published directly to the host.
+
+The following architecture is intentionally prevented:
+
+```text
+Host
+  │
+  ▼
+Application :9000
+```
+
+Instead, application traffic must pass through Nginx.
+
+---
+
+## Nginx Service
+
+The reverse proxy service is:
+
+```text
+nginx
+```
+
+Its container name is:
+
+```text
+github-readme-stats-nginx
+```
+
+The service uses the official:
+
+```text
+nginx:alpine
+```
+
+container image.
+
+Nginx acts as the public HTTP entry point for the deployment stack.
+
+---
+
+## Public HTTP Port
+
+The Nginx service publishes:
+
+```text
+HTTP_PORT → 80
+```
+
+The Compose configuration uses:
+
+```yaml
+ports:
+  - "${HTTP_PORT:-80}:80"
+```
+
+The default host-facing port is:
+
+```text
+80
+```
+
+Configured through:
+
+```dotenv
+HTTP_PORT=80
+```
+
+The resulting default endpoint is:
+
+```text
+http://localhost
+```
+
+For a custom port:
+
+```text
+http://localhost:<HTTP_PORT>
+```
+
+---
+
+## Internal Network
+
+Both services are attached to:
+
+```text
+app-network
+```
+
+The network uses the Docker bridge driver.
+
+The communication model is:
+
+```text
+github-readme-stats-nginx
+        │
+        │ app-network
+        ▼
+github-readme-stats:9000
+```
+
+Docker's internal DNS resolves service names automatically.
+
+Nginx therefore reaches the application through:
+
+```text
+github-readme-stats:9000
+```
+
+No static container IP addresses are required.
+
+---
+
+## Service Dependency
+
+The Nginx service depends on the application service.
+
+Nginx waits for the application to reach a healthy state before startup.
+
+The dependency contract is:
+
+```text
+github-readme-stats
+        │
+        │ healthy
+        ▼
+nginx
+```
+
+This reduces the likelihood of Nginx starting before the application is ready.
+
+---
+
+## Application Health Check
+
+The application container provides its own health check.
+
+The health check verifies that the GitHub Readme Stats application is operational inside the container.
+
+Container health can be inspected with:
+
+```powershell
+docker inspect --format='{{.State.Health.Status}}' github-readme-stats
+```
+
+Expected:
+
+```text
+healthy
+```
+
+---
+
+## Nginx Health Check
+
+The Nginx service provides an independent health check using:
+
+```text
+/nginx-health
+```
+
+The health check verifies the Nginx process without depending on the upstream application.
+
+Container health can be inspected with:
+
+```powershell
+docker inspect --format='{{.State.Health.Status}}' github-readme-stats-nginx
+```
+
+Expected:
+
+```text
+healthy
+```
+
+---
+
+## Nginx Configuration Mounts
+
+The Compose stack mounts repository-managed Nginx configuration into the Nginx container.
+
+Global configuration:
+
+```text
+../nginx/nginx.conf
+        │
+        ▼
+/etc/nginx/nginx.conf
+```
+
+Application configuration:
+
+```text
+../nginx/conf.d
+        │
+        ▼
+/etc/nginx/conf.d
+```
+
+Both mounts are read-only.
 
 ---
 
 ## Restart Policy
 
-The service uses:
+Both runtime services use:
 
-```yaml
-restart: unless-stopped
+```text
+unless-stopped
 ```
 
-Docker automatically restarts the application container after unexpected
-failures or Docker daemon restarts unless the container was explicitly stopped
-by an operator.
-
-This improves service resilience while still allowing intentional
-administrative shutdowns.
+This allows containers to restart automatically after unexpected failures while respecting explicit administrative stops.
 
 ---
 
-## Networking
+## Environment File
 
-Docker Compose automatically creates a default project network for the
-application.
+The Compose stack loads runtime configuration from:
 
-For the current single-service architecture, no custom network configuration is
-required.
+```text
+.env
+```
 
-The default network is sufficient because the application currently has no
-additional containerized dependencies.
+The example configuration contract is stored in:
 
-Future services such as databases, caches, or reverse proxies can be attached
-to explicit networks if the deployment architecture expands.
+```text
+.env.example
+```
+
+The real `.env` file contains deployment-specific values and secrets and must remain outside version control.
 
 ---
 
-## Health Checking
+## Validate Compose Configuration
 
-The Compose configuration does not duplicate the container health-check
-definition.
-
-The Docker image defines its health check using:
+Run from the project root:
 
 ```text
-docker/healthcheck.sh
+D:\Vishal72021\github-readme-stats-deployment
 ```
 
-The Compose service inherits that health check from the built image.
+Validate the complete Compose configuration:
 
-Docker reports the container as:
-
-```text
-starting
-healthy
-unhealthy
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml config --quiet
 ```
 
-The deployment framework waits for the container to reach:
-
-```text
-healthy
-```
-
-before declaring the deployment successful.
-
-This avoids maintaining duplicate health-check logic in both the Dockerfile and
-Compose configuration.
+No output indicates successful validation.
 
 ---
 
-## Validating the Compose Configuration
+## List Services
 
-Run all commands in this section from the project root.
+Run:
 
-Validate the Compose configuration without printing resolved environment values:
-
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    config \
-    --quiet
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml config --services
 ```
 
-A successful validation produces no output.
-
-To list configured services:
-
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    config \
-    --services
-```
-
-Expected output:
+Expected:
 
 ```text
 github-readme-stats
+nginx
 ```
 
-Avoid sharing the output of an unfiltered:
+---
+
+## List Networks
+
+Run:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml config --networks
+```
+
+Expected:
 
 ```text
-docker compose config
+app-network
 ```
-
-command when real secrets are loaded because the resolved configuration may
-contain environment variable values.
 
 ---
 
-## Building the Application
+## Build the Application
 
-To manually build the application image from the project root:
+Run from the project root:
 
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    build github-readme-stats
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml build github-readme-stats
 ```
 
-For normal deployments, use:
-
-```bash
-bash scripts/deploy.sh
-```
-
-The deployment script performs additional validation before and after the
-Compose operations.
+Nginx uses the prebuilt official `nginx:alpine` image and does not require a project-specific image build.
 
 ---
 
-## Starting the Application
+## Start the Stack
 
-To manually start the application:
+Run:
 
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    up \
-    --detach
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml up -d
 ```
+
+This starts:
+
+```text
+github-readme-stats
+github-readme-stats-nginx
+```
+
+---
+
+## View Stack Status
+
+Run:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml ps
+```
+
+Expected state:
+
+```text
+github-readme-stats
+    Running
+    Healthy
+    9000/tcp
+
+github-readme-stats-nginx
+    Running
+    Healthy
+    HTTP_PORT → 80/tcp
+```
+
+Port `9000` must not be published to the host.
+
+---
+
+## View Logs
+
+Application logs:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml logs github-readme-stats
+```
+
+Nginx logs:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml logs nginx
+```
+
+Follow logs:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml logs -f
+```
+
+---
+
+## Verify Nginx Health
+
+With the default port:
+
+```powershell
+curl.exe http://localhost/nginx-health
+```
+
+Expected:
+
+```text
+healthy
+```
+
+---
+
+## Verify Application Routing
+
+Run:
+
+```powershell
+curl.exe -o NUL -s -w "%{http_code}`n" "http://localhost/api?username=octocat"
+```
+
+Expected:
+
+```text
+200
+```
+
+The request path is:
+
+```text
+Host
+  │
+  ▼
+Nginx
+  │
+  ▼
+app-network
+  │
+  ▼
+github-readme-stats:9000
+```
+
+---
+
+## Verify Port Isolation
+
+Run:
+
+```powershell
+docker port github-readme-stats
+```
+
+The application should not have a host-published port.
+
+Direct host access should fail:
+
+```powershell
+curl.exe --max-time 5 http://localhost:9000
+```
+
+---
+
+## Stop the Stack
+
+Run:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml down
+```
+
+This removes the running containers and Compose-managed network.
+
+Application data and source files remain unaffected.
+
+---
+
+## Recreate the Stack
+
+Run:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml up -d --build
+```
+
+This rebuilds the application image and recreates the runtime stack when required.
+
+---
+
+## Deployment Automation
 
 Normal deployments should use:
 
-```bash
+```powershell
 bash scripts/deploy.sh
 ```
 
-instead of invoking Compose directly.
-
----
-
-## Stopping the Application
-
-To stop and remove the Compose-managed application container and network:
-
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    down
-```
-
-This does not delete the dynamically cloned upstream repository.
-
----
-
-## Restarting the Application
-
-To restart the application service:
-
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    restart github-readme-stats
-```
-
-A restart reuses the currently deployed container configuration and image.
-
-For a complete validated redeployment, use:
-
-```bash
-bash scripts/deploy.sh
-```
-
----
-
-## Viewing Container Status
-
-To display the Compose service status:
-
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    ps
-```
-
-To inspect Docker's container and health state directly:
-
-```bash
-docker inspect \
-    --format '{{.State.Status}} / {{.State.Health.Status}}' \
-    github-readme-stats
-```
-
-A successful deployment should report:
+The deployment script manages:
 
 ```text
-running / healthy
+Workspace verification
+        ↓
+Secret validation
+        ↓
+Docker runtime verification
+        ↓
+Compose validation
+        ↓
+Application image build
+        ↓
+Stack deployment
+        ↓
+Application container verification
+        ↓
+Application health verification
+        ↓
+Nginx container verification
+        ↓
+Nginx health verification
+        ↓
+End-to-end reverse proxy verification
 ```
+
+Direct Compose commands are primarily intended for development, debugging, and operational inspection.
 
 ---
 
-## Viewing Container Logs
+## Production Boundary
 
-To display application logs:
-
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    logs github-readme-stats
-```
-
-To follow logs continuously:
-
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    logs \
-    --follow \
-    github-readme-stats
-```
-
-To display only recent logs:
-
-```bash
-docker compose \
-    --env-file .env \
-    --file compose/docker-compose.yml \
-    logs \
-    --tail 50 \
-    github-readme-stats
-```
-
-The deployment script automatically displays recent container logs when
-container startup or application health verification fails.
-
----
-
-## Deployment Integration
-
-The Compose layer is orchestrated by:
+The Compose architecture establishes the following service boundary:
 
 ```text
-scripts/deploy.sh
+External
+   │
+   ▼
+Nginx
+   │
+   ▼
+Internal Docker Network
+   │
+   ▼
+Application
 ```
 
-The deployment lifecycle is:
+The application container must remain internally accessible only.
 
-```text
-Verify Workspace
-      │
-      ▼
-Validate Deployment Secrets
-      │
-      ▼
-Verify Docker Runtime
-      │
-      ▼
-Validate Compose Configuration
-      │
-      ▼
-Build Application Image
-      │
-      ▼
-Start Compose Service
-      │
-      ▼
-Verify Container
-      │
-      ▼
-Wait for Container Health
-      │
-      ▼
-Verify Host HTTP Reachability
-      │
-      ▼
-Deployment Complete
-```
-
-The deployment script invokes Compose using centralized paths and service names
-defined in:
-
-```text
-scripts/config.sh
-```
-
-This prevents deployment-specific paths from being duplicated throughout the
-automation scripts.
+Future external traffic controls should be implemented through the reverse proxy layer.
 
 ---
 
-## Idempotent Deployment
+## Future Extensions
 
-The Compose architecture supports repeated deployments.
+The Compose architecture can be extended to support:
 
-Running:
+- TLS certificate services.
+- HTTPS termination.
+- Monitoring services.
+- Metrics exporters.
+- Centralized logging.
+- Additional application services.
+- Persistent infrastructure services.
+- Production orchestration platforms.
 
-```bash
-bash scripts/deploy.sh
-```
-
-when the application is already deployed will:
-
-1. Validate the existing workspace.
-2. Validate deployment configuration.
-3. Rebuild or reuse cached image layers.
-4. Reconcile the existing Compose service.
-5. Verify that the container is running.
-6. Wait for Docker health verification.
-7. Verify application reachability.
-
-This allows the same deployment workflow to be used for both initial and
-subsequent deployments.
-
----
-
-## Security Considerations
-
-The Compose layer follows these security principles:
-
-- Secrets are loaded from `.env` at runtime.
-- Secrets are not embedded directly in the Compose file.
-- `.env` is excluded from version control.
-- The Docker image does not contain the `.env` file.
-- Secret values are not intentionally printed by deployment scripts.
-- The application container runs as a non-root user.
-- Automated Compose validation uses quiet mode.
-
-Operators should avoid printing or sharing fully resolved Compose configuration
-when secrets are loaded.
-
----
-
-## Ownership Boundaries
-
-The Compose layer owns:
-
-```text
-Service orchestration
-Container runtime configuration
-Environment injection
-Port publishing
-Restart behavior
-Container networking
-```
-
-The Compose layer does not own:
-
-```text
-Docker image implementation
-Repository cloning
-Repository updates
-Workspace configuration
-Deployment verification
-Backup creation
-Backup restoration
-```
-
-These responsibilities belong to the Docker and shell-script layers.
-
----
-
-## Related Components
-
-```text
-deployment/github-readme-stats/
-        │
-        │ Application source
-        ▼
-docker/Dockerfile
-        │
-        │ Image construction
-        ▼
-Docker Image
-        │
-        ▼
-compose/docker-compose.yml
-        │
-        │ Runtime orchestration
-        ▼
-github-readme-stats Container
-        │
-        ▼
-scripts/deploy.sh
-        │
-        │ Deployment verification
-        ▼
-Running Application
-```
-
----
-
-## Recommended Usage
-
-For normal project operation, use the deployment framework rather than invoking
-Compose commands directly:
-
-```bash
-bash scripts/bootstrap.sh
-bash scripts/deploy.sh
-```
-
-Direct Compose commands are primarily intended for debugging, inspection, and
-manual administrative operations.
+Any major change to service topology should be treated as an explicit architecture change.

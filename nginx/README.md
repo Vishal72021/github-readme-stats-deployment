@@ -1,412 +1,654 @@
-# GitHub Readme Stats Deployment
+# Nginx Reverse Proxy
 
-> A production-ready deployment template for self-hosting **GitHub Readme Stats** using Docker, Docker Compose, Nginx, and GitHub Actions.
+This directory contains the Nginx reverse proxy configuration for the GitHub Readme Stats Deployment project.
 
-<p align="center">
+Nginx acts as the public HTTP entry point for the deployment stack. Incoming client requests are accepted by Nginx and forwarded to the GitHub Readme Stats application over an internal Docker network.
 
-<img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License">
-
-<img src="https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white" alt="Docker">
-
-<img src="https://img.shields.io/badge/Docker%20Compose-Supported-2496ED?logo=docker&logoColor=white" alt="Docker Compose">
-
-<img src="https://img.shields.io/badge/Nginx-Ready-009639?logo=nginx&logoColor=white" alt="Nginx">
-
-<img src="https://img.shields.io/badge/GitHub%20Actions-Planned-2088FF?logo=githubactions&logoColor=white" alt="GitHub Actions">
-
-</p>
+The application container is intentionally not exposed directly to the host.
 
 ---
 
-# Overview
+## Purpose
 
-GitHub Readme Stats Deployment is a deployment-focused project that provides a clean, reproducible, and production-ready way to self-host the excellent **GitHub Readme Stats** application.
+The Nginx layer provides a dedicated reverse proxy boundary between external clients and the GitHub Readme Stats application.
 
-Rather than deploying directly to a managed hosting platform, this repository demonstrates how to deploy and operate the application using modern infrastructure practices including Docker containerization, Docker Compose orchestration, reverse proxying with Nginx, and GitHub Actions automation.
+Its responsibilities include:
 
-The objective is to provide a deployment template that is:
+- Accepting incoming HTTP traffic.
+- Acting as the single public HTTP entry point.
+- Forwarding application requests to the internal application service.
+- Preserving client and proxy request metadata.
+- Providing an independent reverse proxy health endpoint.
+- Managing upstream connection behavior.
+- Applying proxy connection and response timeouts.
+- Providing a foundation for future HTTPS and TLS termination.
 
-- Easy to understand
-- Easy to deploy
-- Easy to maintain
-- Suitable for production environments
-
-Whether you're deploying on a VPS, homelab, or cloud server, this project provides a structured starting point built around reproducible infrastructure and clear documentation.
-
----
-
-# Key Features
-
-- 🐳 Docker-first deployment
-- ⚙️ Docker Compose orchestration
-- 🌐 Nginx reverse proxy support
-- 🔒 HTTPS-ready architecture
-- 🚀 GitHub Actions automation
-- ❤️ Container health checks
-- 📚 Deployment-focused documentation
-- 🔄 Simple update workflow
-- 🛠️ Production-oriented repository structure
+Nginx does not manage application runtime behavior or application secrets.
 
 ---
 
-# Technology Stack
+## Architecture
 
-| Category | Technologies |
-|-----------|--------------|
-| Containerization | Docker |
-| Orchestration | Docker Compose |
-| Reverse Proxy | Nginx |
-| Automation | GitHub Actions |
-| Scripting | Shell |
-| Version Control | Git & GitHub |
-| Documentation | Markdown |
-
----
-
-# Architecture
-
-The repository follows a layered deployment architecture where each component has a single responsibility. This separation keeps the deployment simple, maintainable, and easy to extend.
+The deployment uses a two-service runtime architecture:
 
 ```text
-                    Internet
-                        │
-                        ▼
-                   HTTPS Request
-                        │
-                        ▼
-                  Nginx Reverse Proxy
-                        │
-                        ▼
-             GitHub Readme Stats Container
-                        │
-                        ▼
-                    GitHub API
+Client
+  │
+  │ HTTP
+  ▼
+Host : HTTP_PORT
+  │
+  ▼
+Nginx :80
+  │
+  │ app-network
+  ▼
+github-readme-stats :9000
+  │
+  ▼
+GitHub API
 ```
 
-The deployment platform is responsible for:
+Only Nginx publishes a host-facing HTTP port.
 
-- Containerizing the application
-- Managing runtime configuration
-- Providing reverse proxy support
-- Enabling HTTPS termination
-- Supporting automated deployment workflows
-- Documenting deployment and maintenance procedures
-
-The GitHub Readme Stats application itself remains an upstream dependency, while this repository focuses exclusively on deployment and operations.
+The GitHub Readme Stats application remains accessible only through the internal Docker network.
 
 ---
 
-# Repository Structure
+## Directory Structure
 
 ```text
-github-readme-stats-deployment/
-│
-├── .github/
-│   ├── ISSUE_TEMPLATE/
-│   ├── workflows/
-│   ├── CODEOWNERS
-│   ├── CONTRIBUTING.md
-│   ├── PULL_REQUEST_TEMPLATE.md
-│   └── SECURITY.md
-│
-├── compose/
-│   ├── docker-compose.yml
-│   └── README.md
-│
-├── docker/
-│   ├── Dockerfile
-│   ├── .dockerignore
-│   ├── entrypoint.sh
-│   ├── healthcheck.sh
-│   └── README.md
-│
-├── docs/
-│
-├── nginx/
-│   ├── nginx.conf
-│   └── README.md
-│
-├── scripts/
-│   ├── bootstrap.sh
-│   ├── update.sh
-│   ├── backup.sh
-│   └── README.md
-│
-├── .env.example
-├── .editorconfig
-├── .gitattributes
-├── .gitignore
-├── CHANGELOG.md
-├── LICENSE
-└── README.md
+nginx/
+├── README.md
+├── nginx.conf
+└── conf.d/
+    └── github-readme-stats.conf
 ```
+
+### `nginx.conf`
+
+Contains global Nginx runtime configuration.
+
+Responsibilities include:
+
+- Worker process configuration.
+- Connection handling.
+- MIME type configuration.
+- Access logging.
+- Error logging.
+- HTTP runtime defaults.
+- Gzip compression.
+- Baseline security behavior.
+- Loading application-specific configuration files.
+
+Application-specific routing is intentionally excluded from this file.
 
 ---
 
-# Project Workflow
+### `conf.d/github-readme-stats.conf`
 
-The repository is designed around a straightforward deployment workflow.
+Contains the reverse proxy configuration for the GitHub Readme Stats application.
+
+Responsibilities include:
+
+- Defining the application upstream.
+- Accepting incoming HTTP requests.
+- Providing the Nginx health endpoint.
+- Forwarding application traffic.
+- Preserving request metadata.
+- Configuring proxy timeouts.
+- Managing upstream keepalive connections.
+
+---
+
+## Global Nginx Configuration
+
+The global configuration is defined in:
 
 ```text
-Clone Repository
-        │
-        ▼
-Configure Environment
-        │
-        ▼
-Bootstrap Deployment
-        │
-        ▼
-Build Docker Image
-        │
-        ▼
-Start Docker Compose Stack
-        │
-        ▼
-Configure Nginx
-        │
-        ▼
-Production Deployment
+nginx/nginx.conf
 ```
 
-Each stage has a dedicated responsibility:
+The configuration uses automatic worker process detection:
 
-| Stage | Purpose |
-|--------|---------|
-| Configure | Prepare deployment variables |
-| Bootstrap | Validate prerequisites and initialize the environment |
-| Build | Create the deployment image |
-| Deploy | Start the application stack |
-| Reverse Proxy | Route external traffic |
-| Maintain | Update, monitor, and back up the deployment |
+```nginx
+worker_processes auto;
+```
 
-This workflow keeps the deployment process predictable and reproducible while making future enhancements—such as TLS automation or monitoring—easy to integrate.
-
-# Prerequisites
-
-Before deploying the project, ensure the following tools are installed on your system.
-
-| Tool | Minimum Version | Purpose |
-|------|----------------:|---------|
-| Git | Latest Stable | Clone the repository |
-| Docker | 24.x or later | Build and run containers |
-| Docker Compose | v2.x | Container orchestration |
-| Nginx | Latest Stable *(optional)* | Reverse proxy for production deployments |
-
-> **Note:** GitHub Actions is used for CI/CD and does not need to be installed locally.
+This allows Nginx to determine an appropriate number of worker processes based on available CPU resources.
 
 ---
 
-# Quick Start
+## Container Logging
 
-Clone the repository:
+Nginx logs are written directly to standard container output streams.
 
-```bash
-git clone https://github.com/Vishal72021/github-readme-stats-deployment.git
+Access logs:
+
+```text
+/dev/stdout
 ```
 
-Navigate into the project:
+Error logs:
 
-```bash
-cd github-readme-stats-deployment
+```text
+/dev/stderr
 ```
 
-Copy the example environment configuration:
-
-```bash
-cp .env.example .env
-```
-
-> **Windows PowerShell**
+This allows logs to be accessed through Docker:
 
 ```powershell
-Copy-Item .env.example .env
+docker logs github-readme-stats-nginx
 ```
 
-Update the values in `.env` to match your deployment environment.
+or through Docker Compose:
+
+```powershell
+docker compose --env-file .env -f compose/docker-compose.yml logs nginx
+```
 
 ---
 
-# Configuration
+## Security Configuration
 
-Application configuration is managed through environment variables.
+Nginx disables server version tokens:
 
-The repository includes a sample configuration file:
+```nginx
+server_tokens off;
+```
+
+This prevents the exact Nginx version from being exposed through standard response headers and generated error pages.
+
+The current configuration intentionally provides only baseline HTTP reverse proxy security.
+
+Advanced security controls such as TLS, rate limiting, and additional security headers are outside the scope of the current reverse proxy milestone.
+
+---
+
+## Request Body Limit
+
+The global configuration limits request bodies to:
 
 ```text
-.env.example
+1 MB
 ```
 
-Create your own configuration:
+The GitHub Readme Stats application primarily processes HTTP GET requests and query parameters and does not require large request bodies.
+
+This limit can be changed if future application requirements introduce larger request payloads.
+
+---
+
+## Compression
+
+Gzip compression is enabled for supported response types.
+
+Configured types include:
+
+- JavaScript.
+- JSON.
+- XML.
+- SVG.
+- CSS.
+- Plain text.
+
+This is particularly relevant because GitHub Readme Stats returns SVG content.
+
+---
+
+## Application Upstream
+
+The application-specific configuration defines the following upstream:
+
+```nginx
+upstream github_readme_stats {
+    server github-readme-stats:9000;
+    keepalive 32;
+}
+```
+
+The upstream hostname:
 
 ```text
-.env
+github-readme-stats
 ```
 
-The `.env` file should **never** be committed to version control.
+corresponds to the Docker Compose application service.
 
-The following variables are currently defined:
+Docker's internal DNS resolves the service hostname automatically.
 
-| Variable | Description |
-|----------|-------------|
-| `PAT_1` | GitHub Personal Access Token |
-| `PORT` | Application port |
-| `CACHE_SECONDS` | GitHub API cache duration |
-
-Additional variables may be introduced as new deployment features are implemented.
+No static container IP addresses are used.
 
 ---
 
-# Deployment
+## Docker Network
 
-The deployment workflow is intentionally modular.
-
-Once all implementation phases are complete, deployment will follow this sequence:
+Both runtime services are connected to:
 
 ```text
-Clone Repository
-        │
-        ▼
-Configure Environment
-        │
-        ▼
-Run Bootstrap Script
-        │
-        ▼
-Build Docker Image
-        │
-        ▼
-Start Docker Compose Stack
-        │
-        ▼
-Configure Nginx
-        │
-        ▼
-Production Deployment
+app-network
 ```
 
-During development, some of these components may not yet be implemented. Refer to the project roadmap for the current implementation status.
+The communication path is:
+
+```text
+github-readme-stats-nginx
+        │
+        │ app-network
+        ▼
+github-readme-stats:9000
+```
+
+The application does not need a host-published port for Nginx to communicate with it.
 
 ---
 
-# Deployment Philosophy
+## Request Routing
 
-This project follows several engineering principles:
+Nginx listens internally on:
 
-- Reproducible deployments
-- Infrastructure as Code
-- Environment-driven configuration
-- Docker-first development
-- Clear operational documentation
-- Minimal manual setup
-- Incremental feature delivery
+```text
+80
+```
 
----
+All application requests received at `/` are forwarded to the application upstream.
 
-# Project Roadmap
+Example request:
 
-The project is being developed incrementally using a production-first engineering workflow.
+```text
+GET /api?username=octocat
+```
 
-## Repository Foundation
+Request flow:
 
-- [x] Repository structure
-- [x] Engineering standards
-- [x] GitHub community health files
-- [x] Documentation framework
-- [x] Repository documentation
+```text
+Client
+  │
+  ▼
+Nginx
+  │
+  ▼
+github_readme_stats upstream
+  │
+  ▼
+github-readme-stats:9000
+  │
+  ▼
+GitHub Readme Stats
+```
 
-## Deployment
-
-- [ ] Bootstrap automation
-- [ ] Docker image
-- [ ] Docker Compose stack
-- [ ] Nginx reverse proxy
-- [ ] HTTPS configuration
-- [ ] Health monitoring
-
-## Automation
-
-- [ ] GitHub Actions CI
-- [ ] Deployment validation
-- [ ] Release automation
-
-## Documentation
-
-- [ ] Deployment guide
-- [ ] Local development guide
-- [ ] Production deployment guide
-- [ ] Troubleshooting guide
-- [ ] Architecture Decision Records
+The original request URI is preserved when forwarding the request.
 
 ---
 
-# Documentation
+## Forwarded Headers
 
-Project documentation is organized to make deployment and maintenance straightforward.
+Nginx forwards request metadata using the following headers:
 
-| Directory | Description |
-|------------|-------------|
-| `docs/adr/` | Architecture Decision Records |
-| `docs/deployment/` | Deployment guides |
-| `docs/templates/` | Documentation templates |
+```text
+Host
+X-Real-IP
+X-Forwarded-For
+X-Forwarded-Proto
+```
 
-Additional documentation will be added as implementation progresses.
+These headers preserve information about:
 
----
-
-# Contributing
-
-Contributions are welcome.
-
-Please read the following documents before contributing:
-
-- `CONTRIBUTING.md`
-- `SECURITY.md`
-
-When contributing, please:
-
-- Follow the repository structure.
-- Use Conventional Commits.
-- Update documentation when necessary.
-- Keep pull requests focused and easy to review.
+- The original host.
+- The connecting client address.
+- The proxy forwarding chain.
+- The original request protocol.
 
 ---
 
-# License
+## Proxy Protocol
 
-This project is licensed under the **MIT License**.
+Upstream communication uses:
 
-See the `LICENSE` file for complete details.
+```text
+HTTP/1.1
+```
 
----
+Persistent upstream connections are supported through the configured upstream keepalive pool.
 
-# Acknowledgements
-
-This project would not exist without the excellent work of the following open-source communities and maintainers:
-
-- **GitHub Readme Stats** by Anurag Hazra
-- Docker
-- Docker Compose
-- Nginx
-- GitHub Actions
-- The Open Source Community
-
-Special thanks to everyone who contributes to open-source software and shares knowledge with the community.
+The proxy removes the default `Connection` header before forwarding requests to support upstream connection reuse.
 
 ---
 
-# Project Status
+## Proxy Timeouts
 
-> **Status:** 🚧 Active Development
+The reverse proxy defines explicit timeout behavior.
 
-The repository is currently focused on building a production-ready deployment template for GitHub Readme Stats.
+Connection timeout:
 
-The architecture has been finalized, and implementation is progressing incrementally with an emphasis on reproducibility, maintainability, and clear documentation.
+```text
+10 seconds
+```
+
+Send timeout:
+
+```text
+60 seconds
+```
+
+Read timeout:
+
+```text
+60 seconds
+```
+
+These values prevent upstream operations from waiting indefinitely while still allowing sufficient time for application responses.
 
 ---
 
-<p align="center">
+## Nginx Health Endpoint
 
-Made with ❤️ by <strong>Vishal Tripathy</strong>
+Nginx exposes an independent health endpoint:
 
-</p>
+```text
+/nginx-health
+```
+
+Successful response:
+
+```text
+HTTP 200
+healthy
+```
+
+The endpoint is handled directly by Nginx.
+
+It does not contact the GitHub Readme Stats application.
+
+This allows reverse proxy health to be evaluated independently from application health.
+
+---
+
+## Health Architecture
+
+The deployment maintains three separate verification layers:
+
+```text
+Application Health
+      │
+      └── Verifies the GitHub Readme Stats container
+
+Reverse Proxy Health
+      │
+      └── Verifies the Nginx container
+
+End-to-End Verification
+      │
+      └── Verifies Host → Nginx → Application
+```
+
+This separation makes deployment failures easier to diagnose.
+
+---
+
+## Port Model
+
+The application listens internally on:
+
+```text
+9000
+```
+
+The application port is not published directly to the host.
+
+Nginx listens internally on:
+
+```text
+80
+```
+
+The host-facing HTTP port is controlled through:
+
+```text
+HTTP_PORT
+```
+
+Default:
+
+```dotenv
+HTTP_PORT=80
+```
+
+The resulting port flow is:
+
+```text
+Host : HTTP_PORT
+        │
+        ▼
+Nginx :80
+        │
+        ▼
+Application :9000
+```
+
+With the default configuration:
+
+```text
+Host :80
+   │
+   ▼
+Nginx :80
+   │
+   ▼
+github-readme-stats :9000
+```
+
+---
+
+## Configuration Mounts
+
+Docker Compose mounts the Nginx configuration into the container.
+
+Global configuration:
+
+```text
+nginx/nginx.conf
+        │
+        ▼
+/etc/nginx/nginx.conf
+```
+
+Application configuration:
+
+```text
+nginx/conf.d/
+        │
+        ▼
+/etc/nginx/conf.d/
+```
+
+Both mounts are read-only.
+
+This prevents the running Nginx container from modifying repository-managed configuration.
+
+---
+
+## Validate Nginx Configuration
+
+Run from the project root:
+
+```text
+D:\Vishal72021\github-readme-stats-deployment
+```
+
+Validate the running container configuration:
+
+```powershell
+docker exec github-readme-stats-nginx nginx -t
+```
+
+Expected output:
+
+```text
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+```
+
+---
+
+## Verify Nginx Health
+
+With the default HTTP port:
+
+```powershell
+curl.exe http://localhost/nginx-health
+```
+
+Expected response:
+
+```text
+healthy
+```
+
+For a custom HTTP port:
+
+```powershell
+curl.exe http://localhost:<HTTP_PORT>/nginx-health
+```
+
+---
+
+## Verify Application Routing
+
+Run:
+
+```powershell
+curl.exe -o NUL -s -w "%{http_code}`n" "http://localhost/api?username=octocat"
+```
+
+Expected:
+
+```text
+200
+```
+
+This verifies the complete request path:
+
+```text
+Host
+  │
+  ▼
+Nginx
+  │
+  ▼
+Docker Network
+  │
+  ▼
+GitHub Readme Stats
+```
+
+---
+
+## Verify Application Port Isolation
+
+Run:
+
+```powershell
+docker port github-readme-stats
+```
+
+The application container should not report a host mapping for port `9000`.
+
+Direct access should fail:
+
+```powershell
+curl.exe --max-time 5 http://localhost:9000
+```
+
+Application traffic must enter through Nginx.
+
+---
+
+## Restart Verification
+
+Restart the Nginx container:
+
+```powershell
+docker restart github-readme-stats-nginx
+```
+
+Check health:
+
+```powershell
+docker inspect --format='{{.State.Health.Status}}' github-readme-stats-nginx
+```
+
+After the container becomes healthy, verify:
+
+```powershell
+curl.exe http://localhost/nginx-health
+```
+
+and:
+
+```powershell
+curl.exe -o NUL -s -w "%{http_code}`n" "http://localhost/api?username=octocat"
+```
+
+---
+
+## Security Boundary
+
+Nginx establishes the HTTP boundary for the deployment.
+
+The supported architecture is:
+
+```text
+External Client
+      │
+      ▼
+Nginx Reverse Proxy
+      │
+      ▼
+Internal Docker Network
+      │
+      ▼
+GitHub Readme Stats
+```
+
+The application container must not expose port `9000` directly to external clients.
+
+This ensures that future infrastructure controls can be implemented centrally at the reverse proxy layer.
+
+---
+
+## Current Limitations
+
+The current reverse proxy configuration provides HTTP only.
+
+It does not currently implement:
+
+- HTTPS.
+- TLS certificate management.
+- HTTP-to-HTTPS redirects.
+- Rate limiting.
+- Request throttling.
+- Advanced security headers.
+- Authentication.
+- Web Application Firewall functionality.
+
+These capabilities should be introduced through separate architecture changes.
+
+---
+
+## Future Extensions
+
+The reverse proxy architecture is designed to support future capabilities including:
+
+- HTTPS termination.
+- Automated TLS certificate management.
+- HTTP-to-HTTPS redirects.
+- Security headers.
+- Rate limiting.
+- Request throttling.
+- Access control.
+- Multiple application upstreams.
+- Load balancing.
+- Observability and metrics integration.
+
+The current HTTP reverse proxy configuration should remain stable unless a future architecture decision explicitly changes its contract.

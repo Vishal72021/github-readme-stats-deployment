@@ -52,11 +52,14 @@ readonly COMPOSE_DIRECTORY="${PROJECT_ROOT}/compose"
 readonly COMPOSE_FILE="${COMPOSE_DIRECTORY}/docker-compose.yml"
 
 ###############################################################################
-# Docker Runtime
+# Docker Compose Services
 ###############################################################################
 
-readonly DOCKER_SERVICE_NAME="github-readme-stats"
-readonly DOCKER_CONTAINER_NAME="github-readme-stats"
+readonly APPLICATION_SERVICE="github-readme-stats"
+readonly APPLICATION_CONTAINER="github-readme-stats"
+
+readonly PROXY_SERVICE="nginx"
+readonly PROXY_CONTAINER="github-readme-stats-nginx"
 
 ###############################################################################
 # Application Health
@@ -112,6 +115,7 @@ readonly ENV_EXAMPLE_FILE="${PROJECT_ROOT}/.env.example"
 readonly REQUIRED_ENV_KEYS=(
     PAT_1
     PORT
+    HTTP_PORT
     CACHE_SECONDS
     ENVIRONMENT
     LOG_LEVEL
@@ -199,6 +203,7 @@ readonly BACKUP_RETENTION_COUNT=5
 ###############################################################################
 
 readonly DEFAULT_PORT="9000"
+readonly DEFAULT_HTTP_PORT="80"
 readonly DEFAULT_CACHE_SECONDS="21600"
 readonly DEFAULT_LOG_LEVEL="INFO"
 

@@ -147,6 +147,14 @@ validate_port() {
         die "PORT must be between 1 and 65535."
     fi
 
+    if ! is_positive_integer "${HTTP_PORT}"; then
+        die "PORT must be a positive integer."
+    fi
+
+    if (( HTTP_PORT < 1 || HTTP_PORT > 65535 )); then
+        die "PORT must be between 1 and 65535."
+    fi
+
 }
 
 validate_cache_seconds() {
@@ -228,6 +236,7 @@ print_configuration_summary() {
     fi
 
     printf "PORT              : %s\n" "${PORT}"
+    printf "HTTP_PORT         : %s\n" "${HTTP_PORT}"
     printf "CACHE_SECONDS     : %s\n" "${CACHE_SECONDS}"
     printf "ENVIRONMENT       : %s\n" "${ENVIRONMENT}"
     printf "LOG_LEVEL         : %s\n" "${LOG_LEVEL}"

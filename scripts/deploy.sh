@@ -41,6 +41,19 @@ source "${SCRIPT_DIR}/common.sh"
 source "${SCRIPT_DIR}/config.sh"
 
 ###############################################################################
+# Helper Functions
+###############################################################################
+
+compose() {
+
+    docker compose \
+        --env-file "${ENV_FILE}" \
+        --file "${COMPOSE_FILE}" \
+        "$@"
+
+}
+
+###############################################################################
 # Deployment Verification
 ###############################################################################
 
@@ -160,54 +173,37 @@ prepare_deployment() {
 
     log_info "Validating Docker Compose configuration..."
 
-    if ! docker compose \
-        --env-file "${ENV_FILE}" \
-        --file "${COMPOSE_FILE}" \
-        config \
-        --quiet; then
+    if ! compose config --quiet; then
 
         die "Docker Compose configuration is invalid."
+
     fi
 
     log_info "Building application image..."
 
     if ! retry_command \
-        "${RETRY_COUNT}" \
-        "${RETRY_DELAY}" \
-        docker compose \
-        --env-file "${ENV_FILE}" \
-        --file "${COMPOSE_FILE}" \
-        build \
-        "${DOCKER_SERVICE_NAME}"; then
+    "${RETRY_COUNT}" \
+    "${RETRY_DELAY}" \
+    compose build \
+    "${APPLICATION_SERVICE}"; then
 
         die "Failed to build application image."
+
     fi
 
     log_success "Deployment resources prepared successfully."
 
 }
 
-deploy_application() {
+deploy_stack() {
 
-    print_section "Deploying Application"
+    print_section "Deploying Application Stack"
 
-    log_info "Starting application service..."
+    log_info "Starting application stack..."
 
-    if ! retry_command \
-        "${RETRY_COUNT}" \
-        "${RETRY_DELAY}" \
-        docker compose \
-        --env-file "${ENV_FILE}" \
-        --file "${COMPOSE_FILE}" \
-        up \
-        --detach \
-        --no-build \
-        "${DOCKER_SERVICE_NAME}"; then
+    compose up -d
 
-        die "Failed to start application service."
-    fi
-
-    log_success "Application service started."
+    log_success "Application stack started."
 
 }
 
@@ -215,40 +211,52 @@ deploy_application() {
 # Health Checks
 ###############################################################################
 
-verify_containers() {
+verify_application_container() {
 
-    print_section "Verifying Containers"
+    print_section "Verifying Application Container"
 
-    local container_status
+    local status
 
-    container_status="$(
+    status="$(
         docker inspect \
             --format '{{.State.Status}}' \
-            "${DOCKER_CONTAINER_NAME}" \
-            2>/dev/null || true
-    )"
+            "${APPLICATION_CONTAINER}" \
+            2>/dev/null
+    )" || die \
+        "Unable to inspect application container '${APPLICATION_CONTAINER}'."
 
-    if [[ "${container_status}" != "running" ]]; then
-
-        log_error \
-            "Container '${DOCKER_CONTAINER_NAME}' is not running. " \
-            "Current status: '${container_status:-unknown}'."
-
-        log_info "Displaying recent container logs..."
-
-        docker compose \
-            --env-file "${ENV_FILE}" \
-            --file "${COMPOSE_FILE}" \
-            logs \
-            --tail 50 \
-            "${DOCKER_SERVICE_NAME}" \
-            || true
-
-        die "Container verification failed."
+    if [[ "${status}" != "running" ]]; then
+        die \
+            "Application container '${APPLICATION_CONTAINER}' " \
+            "is not running."
     fi
 
     log_success \
-        "Container '${DOCKER_CONTAINER_NAME}' is running."
+        "Application container '${APPLICATION_CONTAINER}' is running."
+
+}
+
+verify_proxy_container() {
+
+    print_section "Verifying Proxy Container"
+
+    local status
+
+    status="$(
+        docker inspect \
+            --format '{{.State.Status}}' \
+            "${PROXY_CONTAINER}" \
+            2>/dev/null
+    )" || die \
+        "Unable to inspect proxy container '${PROXY_CONTAINER}'."
+
+    if [[ "${status}" != "running" ]]; then
+        die \
+            "Proxy container '${PROXY_CONTAINER}' is not running."
+    fi
+
+    log_success \
+        "Proxy container '${PROXY_CONTAINER}' is running."
 
 }
 
@@ -256,151 +264,129 @@ verify_containers() {
 # Container Health Verification
 ###############################################################################
 
-wait_for_container_health() {
+get_container_health() {
 
-    print_section "Waiting for Container Health"
+    local container_name="$1"
 
-    local health_status
-    local attempt=1
-
-    while (( attempt <= CONTAINER_HEALTH_RETRIES )); do
-
-        health_status="$(
-            docker inspect \
-                --format \
-                '{{if .State.Health}}{{.State.Health.Status}}{{else}}unavailable{{end}}' \
-                "${DOCKER_CONTAINER_NAME}" \
-                2>/dev/null || printf "unknown"
-        )"
-
-        case "${health_status}" in
-
-            healthy)
-
-                log_success \
-                    "Container '${DOCKER_CONTAINER_NAME}' is healthy."
-
-                return 0
-
-                ;;
-
-            unhealthy)
-
-                log_error \
-                    "Container '${DOCKER_CONTAINER_NAME}' is unhealthy."
-
-                log_info "Displaying recent container logs..."
-
-                docker compose \
-                    --env-file "${ENV_FILE}" \
-                    --file "${COMPOSE_FILE}" \
-                    logs \
-                    --tail 50 \
-                    "${DOCKER_SERVICE_NAME}" \
-                    || true
-
-                die "Container health verification failed."
-
-                ;;
-
-            starting)
-
-                if (( attempt < CONTAINER_HEALTH_RETRIES )); then
-
-                    log_info \
-                        "Container health status is 'starting'. " \
-                        "Waiting ${CONTAINER_HEALTH_DELAY}s..."
-
-                    sleep "${CONTAINER_HEALTH_DELAY}"
-                fi
-
-                ;;
-
-            *)
-
-                die \
-                    "Unable to determine container health status. " \
-                    "Current status: '${health_status}'."
-
-                ;;
-
-        esac
-
-        ((attempt++))
-
-    done
-
-    log_error \
-        "Container did not become healthy after " \
-        "${CONTAINER_HEALTH_RETRIES} attempts."
-
-    docker compose \
-        --env-file "${ENV_FILE}" \
-        --file "${COMPOSE_FILE}" \
-        logs \
-        --tail 50 \
-        "${DOCKER_SERVICE_NAME}" \
-        || true
-
-    die "Container health verification timed out."
+    docker inspect \
+        --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' \
+        "${container_name}" \
+        2>/dev/null
 
 }
 
-verify_application() {
+verify_application_health() {
 
     print_section "Verifying Application Health"
 
-    if ! command_exists curl; then
-        die "curl is required for application health verification."
-    fi
+    local attempt
+    local health_status
 
-    local health_url
-    local attempt=1
+    for ((attempt = 1; attempt <= HEALTH_CHECK_RETRIES; attempt++)); do
 
-    health_url="http://localhost:${PORT}${HEALTH_CHECK_PATH}"
+        health_status="$(
+            get_container_health "${APPLICATION_CONTAINER}"
+        )" || die \
+            "Unable to determine application container health."
 
-    while (( attempt <= HEALTH_CHECK_RETRIES )); do
-
-        if curl \
-            --silent \
-            --show-error \
-            --output /dev/null \
-            --max-time 5 \
-            "${health_url}"; then
+        if [[ "${health_status}" == "healthy" ]]; then
 
             log_success "Application health check passed."
 
             return 0
+
         fi
 
-        if (( attempt < HEALTH_CHECK_RETRIES )); then
+        log_warn \
+            "Application health check attempt " \
+            "${attempt}/${HEALTH_CHECK_RETRIES} failed. " \
+            "Current status: ${health_status}. " \
+            "Retrying in ${HEALTH_CHECK_DELAY}s..."
 
-            log_warn \
-                "Health check attempt ${attempt}/${HEALTH_CHECK_RETRIES} " \
-                "failed. Retrying in ${HEALTH_CHECK_DELAY}s..."
-
-            sleep "${HEALTH_CHECK_DELAY}"
-        fi
-
-        ((attempt++))
+        sleep "${HEALTH_CHECK_DELAY}"
 
     done
 
-    log_error \
-        "Application health check failed after " \
+    die \
+        "Application failed to become healthy after " \
         "${HEALTH_CHECK_RETRIES} attempts."
 
-    log_info "Displaying recent container logs..."
+}
 
-    docker compose \
-        --env-file "${ENV_FILE}" \
-        --file "${COMPOSE_FILE}" \
-        logs \
-        --tail 50 \
-        "${DOCKER_SERVICE_NAME}" \
-        || true
+verify_proxy_health() {
 
-    die "Application health verification failed."
+    print_section "Verifying Reverse Proxy Health"
+
+    local attempt
+    local health_status
+
+    for ((attempt = 1; attempt <= HEALTH_CHECK_RETRIES; attempt++)); do
+
+        health_status="$(
+            get_container_health "${PROXY_CONTAINER}"
+        )" || die \
+            "Unable to determine reverse proxy container health."
+
+        if [[ "${health_status}" == "healthy" ]]; then
+
+            log_success "Reverse proxy health check passed."
+
+            return 0
+
+        fi
+
+        log_warn \
+            "Reverse proxy health check attempt " \
+            "${attempt}/${HEALTH_CHECK_RETRIES} failed. " \
+            "Current status: ${health_status}. " \
+            "Retrying in ${HEALTH_CHECK_DELAY}s..."
+
+        sleep "${HEALTH_CHECK_DELAY}"
+
+    done
+
+    die \
+        "Reverse proxy failed to become healthy after " \
+        "${HEALTH_CHECK_RETRIES} attempts."
+
+}
+
+verify_proxy_route() {
+
+    print_section "Verifying Reverse Proxy Route"
+
+    local attempt
+    local proxy_url
+
+    proxy_url="http://localhost:${HTTP_PORT}/api?username=octocat"
+
+    for ((attempt = 1; attempt <= HEALTH_CHECK_RETRIES; attempt++)); do
+
+        if curl \
+            --fail \
+            --silent \
+            --show-error \
+            --output /dev/null \
+            --max-time 10 \
+            "${proxy_url}"; then
+
+            log_success \
+                "End-to-end reverse proxy verification passed."
+
+            return 0
+
+        fi
+
+        log_warn \
+            "Reverse proxy verification attempt " \
+            "${attempt}/${HEALTH_CHECK_RETRIES} failed. " \
+            "Retrying in ${HEALTH_CHECK_DELAY}s..."
+
+        sleep "${HEALTH_CHECK_DELAY}"
+
+    done
+
+    die "End-to-end reverse proxy verification failed."
 
 }
 
@@ -410,42 +396,70 @@ verify_application() {
 
 print_deployment_summary() {
 
-    local container_status
-    local container_health
-    local application_url
+    local application_status
+    local application_health
+    local proxy_status
+    local proxy_health
 
-    container_status="$(
+    application_status="$(
         docker inspect \
             --format '{{.State.Status}}' \
-            "${DOCKER_CONTAINER_NAME}" \
-            2>/dev/null || printf "unknown"
+            "${APPLICATION_CONTAINER}"
     )"
 
-    container_health="$(
+    application_health="$(
+        get_container_health "${APPLICATION_CONTAINER}"
+    )"
+
+    proxy_status="$(
         docker inspect \
-            --format \
-            '{{if .State.Health}}{{.State.Health.Status}}{{else}}unavailable{{end}}' \
-            "${DOCKER_CONTAINER_NAME}" \
-            2>/dev/null || printf "unknown"
+            --format '{{.State.Status}}' \
+            "${PROXY_CONTAINER}"
     )"
 
-    application_url="http://localhost:${PORT}"
+    proxy_health="$(
+        get_container_health "${PROXY_CONTAINER}"
+    )"
 
     print_separator
-
     printf "Deployment Summary\n"
-
     print_separator
 
-    printf "%-20s : %s\n" "Environment" "${ENVIRONMENT:-unknown}"
-    printf "%-20s : %s\n" "Repository" "${REPOSITORY_NAME}"
-    printf "%-20s : %s\n" "Service" "${DOCKER_SERVICE_NAME}"
-    printf "%-20s : %s\n" "Container" "${DOCKER_CONTAINER_NAME}"
-    printf "%-20s : %s\n" "Container Status" "${container_status}"
-    printf "%-20s : %s\n" "Container Health" "${container_health}"
-    printf "%-20s : %s\n" "Application Health" "reachable"
-    printf "%-20s : %s\n" "Application Port" "${PORT}"
-    printf "%-20s : %s\n" "Application URL" "${application_url}"
+    printf "%-22s : %s\n" \
+        "Environment" "${ENVIRONMENT}"
+
+    printf "%-22s : %s\n" \
+        "Repository" "${REPOSITORY_NAME}"
+
+    printf "%-22s : %s\n" \
+        "Application Service" "${APPLICATION_SERVICE}"
+
+    printf "%-22s : %s\n" \
+        "Application Container" "${APPLICATION_CONTAINER}"
+
+    printf "%-22s : %s\n" \
+        "Application Status" "${application_status}"
+
+    printf "%-22s : %s\n" \
+        "Application Health" "${application_health}"
+
+    printf "%-22s : %s\n" \
+        "Proxy Service" "${PROXY_SERVICE}"
+
+    printf "%-22s : %s\n" \
+        "Proxy Container" "${PROXY_CONTAINER}"
+
+    printf "%-22s : %s\n" \
+        "Proxy Status" "${proxy_status}"
+
+    printf "%-22s : %s\n" \
+        "Proxy Health" "${proxy_health}"
+
+    printf "%-22s : %s\n" \
+        "HTTP Port" "${HTTP_PORT}"
+
+    printf "%-22s : http://localhost:%s\n" \
+        "Application URL" "${HTTP_PORT}"
 
     print_separator
 
@@ -457,7 +471,9 @@ print_deployment_summary() {
 
 main() {
 
-    print_script_header "Deploy"
+    print_script_header "GitHub Readme Stats Deployment - Deploy"
+
+    printf "Version : %s\n\n" "${PROJECT_VERSION}"
 
     verify_workspace
 
@@ -467,17 +483,22 @@ main() {
 
     prepare_deployment
 
-    deploy_application
+    deploy_stack
 
-    verify_containers
+    verify_application_container
 
-    wait_for_container_health
+    verify_application_health
 
-    verify_application
+    verify_proxy_container
+
+    verify_proxy_health
+
+    verify_proxy_route
 
     print_deployment_summary
 
-    log_success "Application deployment completed successfully."
+    log_success \
+        "Application deployment completed successfully."
 
 }
 

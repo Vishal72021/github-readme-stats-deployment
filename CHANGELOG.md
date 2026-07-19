@@ -11,6 +11,34 @@ The format is based on **Keep a Changelog** and this project adheres to
 
 ### Added
 
+-   None.
+
+### Changed
+
+-   None.
+
+### Deprecated
+
+-   None.
+
+### Removed
+
+-   None.
+
+### Fixed
+
+-   None.
+
+### Security
+
+-   None.
+
+------------------------------------------------------------------------
+
+## \[1.0.0\] - 2026-07-19
+
+### Added
+
 #### Production Deployment
 
 -   Added production deployment support for Oracle Cloud Infrastructure.

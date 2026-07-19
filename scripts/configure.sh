@@ -155,6 +155,13 @@ validate_port() {
         die "PORT must be between 1 and 65535."
     fi
 
+    if ! is_positive_integer "${HTTPS_PORT}" ||
+    (( HTTPS_PORT < 1 || HTTPS_PORT > 65535 )); then
+
+        die "HTTPS_PORT must be an integer between 1 and 65535."
+
+    fi
+
 }
 
 validate_cache_seconds() {
@@ -199,6 +206,12 @@ validate_configuration_values() {
 
     print_section "Validating Configuration Values"
 
+    if [[ -z "${DOMAIN_NAME}" ]]; then
+
+        die "DOMAIN_NAME must not be empty."
+
+    fi
+
     validate_pat
 
     validate_port
@@ -235,8 +248,10 @@ print_configuration_summary() {
         printf "PAT_1             : Missing\n"
     fi
 
+    printf "DOMAIN_NAME       : %s\n" "${DOMAIN_NAME}"
     printf "PORT              : %s\n" "${PORT}"
     printf "HTTP_PORT         : %s\n" "${HTTP_PORT}"
+    printf "HTTPS_PORT        : %s\n" "${HTTPS_PORT}"
     printf "CACHE_SECONDS     : %s\n" "${CACHE_SECONDS}"
     printf "ENVIRONMENT       : %s\n" "${ENVIRONMENT}"
     printf "LOG_LEVEL         : %s\n" "${LOG_LEVEL}"

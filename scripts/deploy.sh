@@ -358,7 +358,7 @@ verify_proxy_route() {
     local attempt
     local proxy_url
 
-    proxy_url="http://localhost:${HTTP_PORT}/api?username=octocat"
+    proxy_url="https://${DOMAIN_NAME}:${HTTPS_PORT}/api?username=octocat"
 
     for ((attempt = 1; attempt <= HEALTH_CHECK_RETRIES; attempt++)); do
 
@@ -368,17 +368,18 @@ verify_proxy_route() {
             --show-error \
             --output /dev/null \
             --max-time 10 \
+            --resolve "${DOMAIN_NAME}:${HTTPS_PORT}:127.0.0.1" \
             "${proxy_url}"; then
 
             log_success \
-                "End-to-end reverse proxy verification passed."
+                "End-to-end HTTPS reverse proxy verification passed."
 
             return 0
 
         fi
 
         log_warn \
-            "Reverse proxy verification attempt " \
+            "HTTPS reverse proxy verification attempt " \
             "${attempt}/${HEALTH_CHECK_RETRIES} failed. " \
             "Retrying in ${HEALTH_CHECK_DELAY}s..."
 
@@ -386,7 +387,7 @@ verify_proxy_route() {
 
     done
 
-    die "End-to-end reverse proxy verification failed."
+    die "End-to-end HTTPS reverse proxy verification failed."
 
 }
 
@@ -458,8 +459,14 @@ print_deployment_summary() {
     printf "%-22s : %s\n" \
         "HTTP Port" "${HTTP_PORT}"
 
-    printf "%-22s : http://localhost:%s\n" \
-        "Application URL" "${HTTP_PORT}"
+    printf "%-22s : %s\n" \
+        "HTTPS Port" "${HTTPS_PORT}"
+
+    printf "%-22s : %s\n" \
+        "Domain Name" "${DOMAIN_NAME}"
+
+    printf "%-22s : https://%s\n" \
+        "Application URL" "${DOMAIN_NAME}"
 
     print_separator
 
